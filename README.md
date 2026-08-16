@@ -1,5 +1,5 @@
 # Enterprise Multi-Site Network Infrastructure using Cisco Packet Tracer
-![Network Design](Screenshot/Screen Shot of Network design.png)
+![Network Design](Screenshot/Network-design.png)
 ## 📖 Overview
 
 This project demonstrates the design and implementation of a secure **enterprise multi-site network** in **Cisco Packet Tracer**. The topology connects a **Head Office** with **two Branch Offices** over redundant WAN links, providing high availability, secure communication, and scalable routing.
