@@ -24,36 +24,6 @@ Port Security, EtherChannel, HSRP, and Rapid-PVST are also implemented to improv
 
 # 2. Network Architecture
 
-The network consists of the following major components:
-
-```text
-                         INTERNET / ISP NETWORK
-                    ┌──────────────┴──────────────┐
-                    │                             │
-                 ISP-1                           ISP-2
-                    │                             │
-               Primary WAN                   Backup WAN
-                    │                             │
-                    └────────── Main Office ─────┘
-                                  │
-                         Layer 3 Switching
-                                  │
-                 ┌────────────────┼────────────────┐
-                 │                │                │
-              VLAN 100         VLAN 200         VLAN 300
-              Users            Users            DHCP/Server
-                 │                │                │
-                 └────────── LAN Infrastructure ──┘
-                                  │
-                              WAN Router
-                                  │
-                             GRE Tunnel
-                                  │
-                           Branch Office
-                                  │
-                              Branch LAN
-```
-
 ### Main Office
 
 The Main Office contains:
