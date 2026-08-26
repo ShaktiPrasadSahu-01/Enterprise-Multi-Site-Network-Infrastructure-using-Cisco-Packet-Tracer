@@ -144,139 +144,296 @@ The primary objectives of this project are:
 
 ---
 
-# 5. LAN Design
+# 5. LAN Configuration
 
-## 5.1 VLAN Configuration
+## 5.1 Access Layer Configuration
 
-Three VLANs are configured in the Main Office:
+The Main Office contains three access-layer switches:
 
-### VLAN 100 — Green
+* `Sw1`
+* `Sw2`
+* `Sw3`
 
-```text
-Network: 10.0.0.0/24
-Gateway: 10.0.0.1
-```
+VLAN 100 and VLAN 200 are created on each access switch.
 
-### VLAN 200 — Purple
-
-```text
-Network: 10.1.0.0/24
-Gateway: 10.1.0.1
-```
-
-### VLAN 300 — DHCP/Server Network
-
-```text
-Network: 10.2.0.0/24
-DHCP Server: 10.2.0.5
-Gateway: 10.2.0.1
-```
-
-VLAN 100 and VLAN 200 are used for end-user devices, while VLAN 300 contains the centralized DHCP Server.
-
----
-
-# 6. Access Layer
-
-The access-layer switches provide connectivity to end-user devices.
-
-Access ports are assigned according to the required VLAN.
-
-Example:
+End-user devices are connected using access ports:
 
 ```text
 Fa0/1 → VLAN 100
 Fa0/2 → VLAN 200
 ```
 
-Trunk links are used between appropriate switches to carry multiple VLANs.
+## Step 1: Configure VLANs on Access-Layer Switches
+
+### Switch 0 — Sw1
+
+```cisco
+enable
+configure terminal
+
+hostname Sw1
+
+vlan 100
+ name Green
+
+vlan 200
+ name Purple
+
+exit
+
+interface fastEthernet 0/1
+ switchport mode access
+ switchport access vlan 100
+ exit
+
+interface fastEthernet 0/2
+ switchport mode access
+ switchport access vlan 200
+ exit
+```
 
 ---
 
-# 7. LACP EtherChannel
+### Switch 1 — Sw2
 
-LACP is configured between access-layer switches to combine multiple physical links into a logical EtherChannel.
+```cisco
+enable
+configure terminal
+
+hostname Sw2
+
+vlan 100
+ name Green
+
+vlan 200
+ name Purple
+
+exit
+
+interface fastEthernet 0/1
+ switchport mode access
+ switchport access vlan 100
+ exit
+
+interface fastEthernet 0/2
+ switchport mode access
+ switchport access vlan 200
+ exit
+```
+
+---
+
+### Switch 2 — Sw3
+
+```cisco
+enable
+configure terminal
+
+hostname Sw3
+
+vlan 100
+ name Green
+
+vlan 200
+ name Purple
+
+exit
+
+interface fastEthernet 0/1
+ switchport mode access
+ switchport access vlan 100
+ exit
+
+interface fastEthernet 0/2
+ switchport mode access
+ switchport access vlan 200
+ exit
+```
+
+---
+
+## 5.2 LACP EtherChannel
+
+LACP EtherChannel is configured between the access-layer switches.
+
+EtherChannel combines multiple physical interfaces into a single logical interface called a **Port-Channel**.
 
 This provides:
 
-- Increased bandwidth
-- Link redundancy
-- Better availability
-- Reduced dependency on a single physical link
+* Increased bandwidth
+* Link redundancy
+* Improved availability
+* Reduced dependency on a single physical link
 
-LACP modes used in the topology include:
+The topology uses the following LACP modes:
 
 ```text
 Active
 Passive
 ```
 
-The EtherChannel configuration is verified using:
+## Step 2: Configure LACP EtherChannel Between Access Switches
 
-```bash
-show etherchannel summary
+### Sw1
+
+First, verify the directly connected devices:
+
+```cisco
+enable
+show cdp neighbors
 ```
 
-The expected result is that the configured physical interfaces are successfully bundled into the corresponding Port-Channel.
+Configure interfaces `Fa0/3` and `Fa0/4` as a trunk and add them to EtherChannel Group 1.
+
+```cisco
+configure terminal
+
+interface range fastEthernet 0/3-4
+ switchport mode trunk
+ channel-protocol lacp
+ channel-group 1 mode active
+```
 
 ---
 
-# 8. Spanning Tree
+### Sw2
 
-Spanning Tree Protocol is configured to prevent Layer 2 switching loops.
+First, verify the directly connected devices:
 
-The Main Office switching infrastructure uses Rapid-PVST for faster convergence.
+```cisco
+enable
+show cdp neighbors
+```
 
-The appropriate multilayer switch is configured as the root bridge for the required VLANs.
+Configure interfaces `Fa0/3` and `Fa0/4` for EtherChannel Group 1:
 
-STP can be verified using:
+```cisco
+configure terminal
 
-```bash
+interface range fastEthernet 0/3-4
+ switchport mode trunk
+ channel-protocol lacp
+ channel-group 1 mode passive
+
+exit
+```
+
+Configure interfaces `Fa0/5` and `Fa0/6` for EtherChannel Group 2:
+
+```cisco
+interface range fastEthernet 0/5-6
+ switchport mode trunk
+ channel-protocol lacp
+ channel-group 2 mode active
+```
+
+---
+
+### Sw3
+
+First, verify the directly connected devices:
+
+```cisco
+enable
+show cdp neighbors
+```
+
+Configure interfaces `Fa0/3` and `Fa0/4` for EtherChannel Group 2:
+
+```cisco
+configure terminal
+
+interface range fastEthernet 0/3-4
+ switchport mode trunk
+ channel-protocol lacp
+ channel-group 2 mode passive
+```
+
+---
+
+## Verify EtherChannel
+
+After completing the configuration, run the following command on each access-layer switch:
+
+```cisco
+show etherchannel summary
+```
+
+The verification should confirm that the physical interfaces are successfully bundled into their corresponding Port-Channel.
+
+Expected logical connections:
+
+```text
+Sw1 ←→ Sw2 = Port-Channel 1
+Sw2 ←→ Sw3 = Port-Channel 2
+```
+
+---
+
+## 5.3 Spanning Tree Configuration
+
+Spanning Tree Protocol (STP) is used to prevent Layer 2 switching loops.
+
+Because redundant Layer 2 paths exist through the EtherChannel connections, STP ensures that a loop-free topology is maintained.
+
+The switching infrastructure uses Rapid-PVST for faster convergence.
+
+## Step 3: Configure the Root Bridge
+
+### Configuration on Sw1
+
+The following configuration makes `Sw1` the root bridge for VLAN 1, VLAN 100, and VLAN 200.
+
+```cisco
+enable
+configure terminal
+
+spanning-tree vlan 1 root primary
+spanning-tree vlan 100 root primary
+spanning-tree vlan 200 root primary
+```
+
+> The commands `no spanning-tree vlan 1`, `no spanning-tree vlan 100`, and `no spanning-tree vlan 200` are not required before configuring the root bridge.
+
+## Verify Spanning Tree
+
+```cisco
 show spanning-tree
 ```
 
 The verification should confirm:
 
-- Correct root bridge
-- Correct root ports
-- Correct forwarding ports
-- No unexpected Layer 2 loops
+* Sw1 is the root bridge for the configured VLANs.
+* The correct ports are in forwarding state.
+* Redundant paths are managed by STP.
+* No Layer 2 switching loops exist.
 
 ---
 
-# 9. Inter-VLAN Routing
+## 5.4 Inter-VLAN Routing
 
-Inter-VLAN routing is performed using the multilayer switches.
+Inter-VLAN routing is performed by two multilayer switches:
 
-SVIs are configured for VLAN 100 and VLAN 200.
+* `MLS-1`
+* `MLS-2`
 
-### MLS-1
+Switch Virtual Interfaces (SVIs) are configured for VLAN 100 and VLAN 200.
 
-```text
-VLAN 100 → 10.0.0.2/24
-VLAN 200 → 10.1.0.2/24
-```
+Layer 3 routing is enabled using:
 
-### MLS-2
-
-```text
-VLAN 100 → 10.0.0.3/24
-VLAN 200 → 10.1.0.3/24
-```
-
-Layer 3 routing is enabled on the multilayer switches.
-
-```bash
+```cisco
 ip routing
 ```
 
-The VLAN networks are therefore routed directly by the multilayer switches rather than depending on an external router for inter-VLAN communication.
+This allows devices in different VLANs to communicate through the multilayer switches.
 
 ---
 
-# 10. HSRP Gateway Redundancy
+# 6. HSRP Gateway Redundancy
 
-HSRP is implemented between the two multilayer switches.
+HSRP is configured between `MLS-1` and `MLS-2` to provide default gateway redundancy.
+
+The hosts use a virtual IP address as their default gateway.
 
 ### VLAN 100
 
@@ -294,21 +451,178 @@ MLS-2: 10.1.0.3
 Virtual Gateway: 10.1.0.1
 ```
 
-MLS-1 is configured with a higher priority and therefore acts as the preferred active HSRP device.
+`MLS-1` has a higher HSRP priority and acts as the preferred Active gateway.
 
-MLS-2 provides standby gateway functionality.
-
-HSRP verification:
-
-```bash
-show standby
-```
-
-The purpose of HSRP is to ensure that users continue to have a default gateway even if the primary multilayer switch becomes unavailable.
+`MLS-2` acts as the Standby gateway.
 
 ---
 
-# 11. DHCP Server and DHCP Relay
+## Configuration of MLS-1
+
+### Create VLANs
+
+```cisco
+enable
+configure terminal
+
+hostname MLS-1
+
+vlan 100
+ name Green
+
+vlan 200
+ name Purple
+```
+
+### Configure VLAN 100 SVI and HSRP
+
+```cisco
+interface vlan 100
+ ip address 10.0.0.2 255.255.255.0
+
+ standby 10 priority 150
+ standby 10 preempt
+ standby 10 ip 10.0.0.1
+
+exit
+```
+
+### Configure Trunk Interfaces
+
+Verify the connected devices:
+
+```cisco
+do show cdp neighbors
+```
+
+Configure the uplink interfaces:
+
+```cisco
+interface range fastEthernet 0/1-3
+ switchport mode trunk
+ switchport trunk encapsulation dot1q
+```
+
+### Configure VLAN 200 SVI and HSRP
+
+```cisco
+interface vlan 200
+ ip address 10.1.0.2 255.255.255.0
+
+ standby 11 priority 150
+ standby 11 preempt
+ standby 11 ip 10.1.0.1
+
+exit
+```
+
+### Enable Layer 3 Routing
+
+```cisco
+ip routing
+```
+
+---
+
+## Configuration of MLS-2
+
+### Create VLANs
+
+```cisco
+enable
+configure terminal
+
+hostname MLS-2
+
+vlan 100
+ name Green
+
+vlan 200
+ name Purple
+```
+
+### Configure VLAN 100 SVI and HSRP
+
+```cisco
+interface vlan 100
+ ip address 10.0.0.3 255.255.255.0
+
+ standby 10 priority 100
+ standby 10 preempt
+ standby 10 ip 10.0.0.1
+
+exit
+```
+
+### Configure Trunk Interfaces
+
+Verify the connected devices:
+
+```cisco
+do show cdp neighbors
+```
+
+Configure the uplink interfaces:
+
+```cisco
+interface range fastEthernet 0/1-3
+ switchport mode trunk
+ switchport trunk encapsulation dot1q
+```
+
+### Configure VLAN 200 SVI and HSRP
+
+```cisco
+interface vlan 200
+ ip address 10.1.0.3 255.255.255.0
+
+ standby 11 priority 100
+ standby 11 preempt
+ standby 11 ip 10.1.0.1
+
+exit
+```
+
+### Enable Layer 3 Routing
+
+```cisco
+ip routing
+```
+
+---
+
+## Verify HSRP
+
+Use the following command on both multilayer switches:
+
+```cisco
+show standby
+```
+
+The expected result is:
+
+```text
+MLS-1 → Active
+MLS-2 → Standby
+```
+
+The hosts in VLAN 100 use:
+
+```text
+Default Gateway: 10.0.0.1
+```
+
+The hosts in VLAN 200 use:
+
+```text
+Default Gateway: 10.1.0.1
+```
+
+If the active multilayer switch becomes unavailable, the standby multilayer switch takes over the virtual gateway, allowing users to continue communicating with other networks.
+
+---
+
+# 7. DHCP Server and DHCP Relay
 
 A centralized **DHCP Server** is configured in **VLAN 300** to automatically assign IP addresses to devices in **VLAN 100** and **VLAN 200**.
 
@@ -497,7 +811,7 @@ ipconfig /all
 
 > **Result:** The centralized DHCP Server in VLAN 300 successfully provides dynamic IP addressing to clients in VLAN 100 and VLAN 200 using DHCP Relay configured on the Multilayer Switch.
 
-# 12. Main Office to WAN Router Connectivity
+# 8. Main Office to WAN Router Connectivity
 
 The Layer 3 switch and WAN router are connected using a separate routed network.
 
@@ -518,7 +832,7 @@ The Main Office multilayer switch uses a default route toward the WAN router.
 
 ---
 
-# 13. WAN Design
+# 9. WAN Design
 
 The WAN uses `/30` point-to-point networks.
 
@@ -550,7 +864,7 @@ The purpose of the second Internet connection is to provide connectivity redunda
 
 ---
 
-# 14. Default Routing
+# 10. Default Routing
 
 Default routes are configured on the appropriate routers to forward traffic toward the Internet/WAN.
 
@@ -570,7 +884,7 @@ show ip route
 
 ---
 
-# 15. OSPF Dynamic Routing
+# 11. OSPF Dynamic Routing
 
 OSPF is configured across the WAN/ISP section.
 
@@ -609,7 +923,7 @@ The expected result is that OSPF neighbors reach the appropriate adjacency state
 
 ---
 
-# 16. PAT — Internet Access
+# 12. PAT — Internet Access
 
 Private IP addresses used by the internal LAN are not directly routable across the public Internet.
 
@@ -655,7 +969,7 @@ show ip nat statistics
 
 ---
 
-# 17. Return Routing
+# 13. Return Routing
 
 NAT solves the source-address translation problem, but the router must also know where to send return traffic after translation.
 
@@ -673,7 +987,7 @@ is forwarded toward the Main Office LAN rather than being sent back toward the I
 
 ---
 
-# 18. Port Security
+# 14. Port Security
 
 Port Security is configured on end-user access ports.
 
@@ -701,7 +1015,7 @@ show port-security interface fa0/1
 
 ---
 
-# 19. GRE Site-to-Site Connectivity
+# 15. GRE Site-to-Site Connectivity
 
 A GRE tunnel is configured between the Main Office and Branch Office routers.
 
@@ -738,7 +1052,7 @@ The GRE tunnel allows private network traffic to travel between the two location
 
 ---
 
-# 20. Static Routing Through GRE
+# 16. Static Routing Through GRE
 
 Static routes are configured so that traffic destined for the remote private networks is forwarded through the GRE tunnel.
 
@@ -774,7 +1088,7 @@ show interface tunnel 1
 
 ---
 
-# 21. Network Security
+# 17. Network Security
 
 The project implements multiple security and availability mechanisms.
 
@@ -808,7 +1122,7 @@ Two Internet connections provide an additional level of network availability.
 
 ---
 
-# 22. Verification and Testing
+# 18. Verification and Testing
 
 The network should be verified in layers rather than testing the complete topology at once.
 
@@ -846,7 +1160,7 @@ show port-security
 
 ---
 
-# 23. Layer 3 Verification
+# 19. Layer 3 Verification
 
 ### Interface Status
 
@@ -884,7 +1198,7 @@ ping <destination-ip>
 
 ---
 
-# 24. DHCP Verification
+# 20. DHCP Verification
 
 On the client:
 
@@ -917,7 +1231,7 @@ depending on the VLAN.
 
 ---
 
-# 25. OSPF Verification
+# 21. OSPF Verification
 
 Verify neighbors:
 
@@ -945,7 +1259,7 @@ ping <remote-ip>
 
 ---
 
-# 26. NAT/PAT Verification
+# 22. NAT/PAT Verification
 
 Generate Internet-bound traffic from an internal client.
 
@@ -965,7 +1279,7 @@ The NAT table should show translations between private internal addresses and th
 
 ---
 
-# 27. GRE Verification
+# 23. GRE Verification
 
 Verify the tunnel interface:
 
@@ -1003,7 +1317,7 @@ Then test communication with the actual remote Branch Office private IP.
 
 ---
 
-# 28. Dual-ISP Failover Testing
+# 24. Dual-ISP Failover Testing
 
 The Main Office has two Internet connections.
 
@@ -1053,7 +1367,7 @@ Document the results before and after the primary link failure.
 
 ---
 
-# 29. Troubleshooting Methodology
+# 25. Troubleshooting Methodology
 
 Troubleshooting should be performed from the lower layers toward the upper layers.
 
@@ -1139,7 +1453,7 @@ Verify tunnel status.
 
 ---
 
-# 30. Final Testing Matrix
+# 26. Final Testing Matrix
 
 | Test                | Source         | Destination        | Expected Result       |
 | ------------------- | -------------- | ------------------ | --------------------- |
@@ -1159,47 +1473,7 @@ Verify tunnel status.
 
 ---
 
-# 31. Final Verification Checklist
-
-- [ ] VLAN 100 configured
-- [ ] VLAN 200 configured
-- [ ] VLAN 300 configured
-- [ ] Access ports assigned correctly
-- [ ] Trunk links operational
-- [ ] LACP EtherChannel operational
-- [ ] STP configured
-- [ ] Rapid-PVST enabled
-- [ ] Correct STP root bridge configured
-- [ ] Inter-VLAN routing operational
-- [ ] HSRP configured
-- [ ] HSRP active/standby roles verified
-- [ ] DHCP Server configured
-- [ ] DHCP pools created
-- [ ] DHCP relay configured
-- [ ] Clients receive DHCP addresses
-- [ ] `192.168.11.0/30` routed connection operational
-- [ ] WAN `/30` links operational
-- [ ] Default routes configured
-- [ ] OSPF Area 0 operational
-- [ ] OSPF neighbors established
-- [ ] OSPF routes learned
-- [ ] PAT configured
-- [ ] NAT translations verified
-- [ ] Return routes configured
-- [ ] Port Security enabled
-- [ ] Sticky MAC addresses learned
-- [ ] GRE tunnel operational
-- [ ] GRE static routes configured
-- [ ] Main Office ↔ Branch connectivity verified
-- [ ] Primary Internet connection verified
-- [ ] Secondary Internet connection verified
-- [ ] Internet failover tested
-- [ ] End-to-end connectivity verified
-- [ ] Final configurations documented
-
----
-
-# 32. Project Outcome
+# 27. Project Outcome
 
 The completed project demonstrates the implementation of a **reliable, segmented, and redundant enterprise network**.
 
@@ -1217,7 +1491,7 @@ This project demonstrates practical implementation and integration of **switchin
 
 ---
 
-# 33. Skills Demonstrated
+# 28. Skills Demonstrated
 
 Through this project, the following networking skills are demonstrated:
 
@@ -1246,7 +1520,7 @@ Through this project, the following networking skills are demonstrated:
 
 ---
 
-# 34. Conclusion
+# 29. Conclusion
 
 This project successfully demonstrates how multiple networking technologies can be integrated to build a structured enterprise network.
 
