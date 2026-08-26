@@ -862,7 +862,7 @@ The project uses:
 
 ```text
 OSPF Process ID: 1
-Area: 0
+Area: 100
 ```
 
 OSPF dynamically exchanges routing information between the participating routers.
